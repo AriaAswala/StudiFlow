@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StudiFlow - Dashboard Mahasiswa</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="user-badge">NIM: 20250803089</div>
+            <button id="notif-btn" onclick="requestNotifPermission()" style="padding: 5px 10px; font-size: 0.7rem; background: #334155; margin-left: 10px; border-radius: 8px; border: 1px solid #64748b; color: #cbd5e1; cursor: pointer;">
+                🔔 Aktifkan Pengingat
+            </button>
+            <div class="logo-icon">🚀</div>
+            <h1>Studi<span>Flow</span></h1>
+            <p>Satu tempat untuk semua tugas, materi, dan jadwalmu.</p>
+        </header>
+
+        <nav class="menu-bar">
+            <button class="tab-btn active" onclick="switchTab('tugas', this)">📝 Tugas</button>
+            <button class="tab-btn" onclick="switchTab('materi', this)">📁 Materi</button>
+            <button class="tab-btn" onclick="switchTab('acara', this)">🗓️ Acara</button>
+        </nav>
+
+        <div id="tab-tugas" class="tab-content active">
+            <section class="input-section">
+                <input type="text" id="taskName" placeholder="Nama Tugas (misal: Projek Ngoding)..." required>
+                <input type="text" id="courseName" placeholder="Mata Kuliah (misal: Algoritma)..." required>
+                <textarea id="taskDesc" rows="2" placeholder="Catatan / Deskripsi Tugas (Opsional)..."></textarea>
+                <div class="datetime-group">
+                    <input type="date" id="deadlineDate" required>
+                    <input type="time" id="deadlineTime" required value="23:59">
+                </div>
+                <button onclick="addTask()">+ Tambah Tugas</button>
+            </section>
+            <section class="list-section">
+                <h2>Daftar Tunggu Tugas</h2>
+                <ul id="taskList"></ul>
+            </section>
+        </div>
+
+        <div id="tab-materi" class="tab-content">
+            <section class="input-section">
+                <input type="text" id="matCourse" placeholder="Mata Kuliah (misal: Pemrograman C++)..." required>
+                <input type="text" id="matName" placeholder="Nama Judul Materi..." required>
+                
+                <div class="datetime-group">
+                    <select id="matType">
+                        <option value="PDF">📄 PDF</option>
+                        <option value="PPT">📊 PPT / Slide</option>
+                        <option value="DOC">📝 Word / Doc</option>
+                        <option value="Lainnya">📦 Lainnya</option>
+                    </select>
+                    
+                    <select id="matSourceType" onchange="toggleMatInput()">
+                        <option value="link">🔗 Link Web / Drive</option>
+                        <option value="file">📁 Upload File (Pilih PDF/Doc)</option>
+                    </select>
+                </div>
+
+                <textarea id="matDesc" rows="2" placeholder="Deskripsi singkat materi ini (Opsional)..."></textarea>
+                
+                <input type="text" id="matLink" placeholder="Tempel Link Google Drive / Web di sini..." required>
+                <input type="file" id="matFile" class="file-input" accept=".pdf,.ppt,.pptx,.doc,.docx" style="display: none;">
+                
+                <button onclick="addMaterial()" style="background-color: #14b8a6;">☁️ Simpan Materi</button>
+            </section>
+            
+            <section class="list-section">
+                <div class="list-header">
+                    <h2>Arsip Materi Kuliah</h2>
+                    <select id="filterCourse" onchange="renderMaterials()">
+                        <option value="Semua">Tampilkan Semua Matkul</option>
+                    </select>
+                </div>
+                <ul id="materialList"></ul>
+            </section>
+        </div>
+
+        <div id="tab-acara" class="tab-content">
+            <section class="input-section">
+                <input type="text" id="eventName" placeholder="Nama Acara (misal: Kerja Kelompok)..." required>
+                <input type="text" id="eventLocation" placeholder="Lokasi (misal: Perpus / Zoom)..." required>
+                <textarea id="eventDesc" rows="2" placeholder="Catatan acara misal 'bawa buku' (Opsional)..."></textarea>
+                <div class="datetime-group">
+                    <input type="date" id="eventDate" required>
+                    <input type="time" id="eventTime" required>
+                </div>
+                <button onclick="addEvent()" style="background-color: #8b5cf6;">+ Tambah Jadwal</button>
+            </section>
+            <section class="list-section">
+                <h2>Jadwal Mendatang</h2>
+                <ul id="eventList"></ul>
+            </section>
+        </div>
+
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

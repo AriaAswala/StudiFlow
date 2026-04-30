@@ -1,3 +1,27 @@
+// --- Fungsi Utilitas ---
+function escapeHTML(str) {
+    if (!str) return '';
+    return str.replace(/[&<>'"]/g, 
+        tag => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            "'": '&#39;',
+            '"': '&quot;'
+        }[tag] || tag)
+    );
+}
+
+function showToast(message, type = 'success') {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.innerHTML = `${type === 'error' ? '⚠️' : '✅'} &nbsp; ${escapeHTML(message)}`;
+    container.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+}
+
 // --- Pendaftaran Service Worker untuk Notifikasi Latar Belakang ---
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js')
@@ -8,12 +32,12 @@ if ('serviceWorker' in navigator) {
 // Fungsi Meminta Izin Notifikasi
 function requestNotifPermission() {
     if (!("Notification" in window)) {
-        alert("Browser kamu tidak mendukung notifikasi.");
+        showToast("Browser kamu tidak mendukung notifikasi.", "error");
         return;
     }
     Notification.requestPermission().then(permission => {
         if (permission === "granted") {
-            alert("Notifikasi aktif! Kamu akan diingatkan saat deadline tiba.");
+            showToast("Notifikasi aktif! Kamu akan diingatkan saat deadline tiba.", "success");
             document.getElementById('notif-btn').style.display = 'none';
         }
     });
@@ -56,12 +80,13 @@ function renderTasks() {
     tasks.forEach((task, i) => {
         const li = document.createElement('li');
         const fDate = new Date(`${task.date}T${task.time}`).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'short' });
-        const descHTML = task.desc ? `<div class="desc-box">${task.desc}</div>` : '';
+        const safeDesc = escapeHTML(task.desc);
+        const descHTML = safeDesc ? `<div class="desc-box">${safeDesc}</div>` : '';
 
         li.innerHTML = `
             <div class="info">
-                <h3>${task.name}</h3>
-                <p>📚 ${task.course} | ⏰ ${fDate} - ${task.time}</p>
+                <h3>${escapeHTML(task.name)}</h3>
+                <p>📚 ${escapeHTML(task.course)} | ⏰ ${fDate} - ${task.time}</p>
                 <div class="badge" id="cd-${i}">Waktu...</div>
                 ${descHTML}
             </div>
@@ -108,10 +133,11 @@ function addTask() {
     const date = document.getElementById('deadlineDate').value;
     let time = document.getElementById('deadlineTime').value || "23:59";
 
-    if (!name || !course || !date) return alert('Isi data tugas dengan lengkap!');
+    if (!name || !course || !date) return showToast('Isi data tugas dengan lengkap!', 'error');
     
     tasks.push({ name, course, desc, date, time });
     saveTasks(); renderTasks();
+    showToast('Tugas berhasil ditambahkan!', 'success');
     
     document.getElementById('taskName').value = ''; document.getElementById('courseName').value = ''; document.getElementById('taskDesc').value = '';
 }
@@ -151,18 +177,19 @@ function renderMaterials() {
     filtered.forEach((mat, i) => {
         const li = document.createElement('li');
         li.className = "materi-item";
-        const descHTML = mat.desc ? `<div class="desc-box">${mat.desc}</div>` : '';
+        const safeDesc = escapeHTML(mat.desc);
+        const descHTML = safeDesc ? `<div class="desc-box">${safeDesc}</div>` : '';
         let actionHTML = mat.sourceType === 'link' ? 
-            `<p>🔗 <a href="${mat.link}" target="_blank">Buka Dokumen / Link</a></p>` : 
-            `<p>📁 <strong>Nama File:</strong> <span style="color:#38bdf8;">${mat.fileName}</span></p>`;
+            `<p>🔗 <a href="${escapeHTML(mat.link)}" target="_blank">Buka Dokumen / Link</a></p>` : 
+            `<p>📁 <strong>Nama File:</strong> <a href="${mat.fileData || '#'}" download="${escapeHTML(mat.fileName)}" style="color:#38bdf8; text-decoration: underline; cursor: pointer;">${escapeHTML(mat.fileName)}</a></p>`;
 
         // Cari index asli di array 'materials' untuk fungsi delete
         const originalIndex = materials.findIndex(m => m === mat);
 
         li.innerHTML = `
             <div class="info">
-                <span style="color:#14b8a6; font-size:0.75rem; font-weight:700;">${mat.course.toUpperCase()}</span>
-                <h3>[${mat.type}] ${mat.name}</h3>
+                <span style="color:#14b8a6; font-size:0.75rem; font-weight:700;">${escapeHTML(mat.course).toUpperCase()}</span>
+                <h3>[${escapeHTML(mat.type)}] ${escapeHTML(mat.name)}</h3>
                 ${actionHTML}
                 ${descHTML}
             </div>
@@ -179,20 +206,37 @@ function addMaterial() {
     const desc = document.getElementById('matDesc').value;
     const sourceType = document.getElementById('matSourceType').value;
     
-    let link = "", fileName = "";
+    let link = "", fileName = "", fileData = null;
 
     if (sourceType === 'link') {
         link = document.getElementById('matLink').value;
-        if (!course || !name || !link) return alert('Isi Matkul, Judul, dan Link!');
+        if (!course || !name || !link) return showToast('Isi Matkul, Judul, dan Link!', 'error');
+        
+        materials.push({ course, name, type, desc, sourceType, link, fileName, fileData });
+        saveMaterials(); updateCourseFilter(); renderMaterials();
+        clearMatInputs();
+        showToast('Materi berhasil disimpan!', 'success');
     } else {
         const fileInput = document.getElementById('matFile');
-        if (!course || !name || fileInput.files.length === 0) return alert('Isi Matkul, Judul, dan pilih File!');
-        fileName = fileInput.files[0].name;
+        if (!course || !name || fileInput.files.length === 0) return showToast('Isi Matkul, Judul, dan pilih File!', 'error');
+        
+        const file = fileInput.files[0];
+        fileName = file.name;
+        
+        // Membaca file sebagai Base64
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            fileData = e.target.result;
+            materials.push({ course, name, type, desc, sourceType, link, fileName, fileData });
+            saveMaterials(); updateCourseFilter(); renderMaterials();
+            clearMatInputs();
+            showToast('Materi file berhasil disimpan!', 'success');
+        };
+        reader.readAsDataURL(file);
     }
-    
-    materials.push({ course, name, type, desc, sourceType, link, fileName });
-    saveMaterials(); updateCourseFilter(); renderMaterials();
-    
+}
+
+function clearMatInputs() {
     document.getElementById('matCourse').value = ''; document.getElementById('matName').value = ''; 
     document.getElementById('matDesc').value = ''; document.getElementById('matLink').value = ''; document.getElementById('matFile').value = '';
 }
@@ -210,12 +254,13 @@ function renderEvents() {
         const li = document.createElement('li');
         li.className = "acara-item";
         const fDate = new Date(`${ev.date}T${ev.time}`).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' });
-        const descHTML = ev.desc ? `<div class="desc-box">${ev.desc}</div>` : '';
+        const safeDesc = escapeHTML(ev.desc);
+        const descHTML = safeDesc ? `<div class="desc-box">${safeDesc}</div>` : '';
 
         li.innerHTML = `
             <div class="info">
-                <h3>${ev.name}</h3>
-                <p>📍 ${ev.location} | 🗓️ ${fDate} jam ${ev.time}</p>
+                <h3>${escapeHTML(ev.name)}</h3>
+                <p>📍 ${escapeHTML(ev.location)} | 🗓️ ${fDate} jam ${ev.time}</p>
                 ${descHTML}
             </div>
             <button class="delete-btn" onclick="deleteEvent(${i})">Hapus</button>
@@ -231,9 +276,10 @@ function addEvent() {
     const date = document.getElementById('eventDate').value;
     const time = document.getElementById('eventTime').value;
 
-    if (!name || !location || !date || !time) return alert('Lengkapi data acara!');
+    if (!name || !location || !date || !time) return showToast('Lengkapi data acara!', 'error');
     events.push({ name, location, desc, date, time });
     saveEvents(); renderEvents();
+    showToast('Acara berhasil ditambahkan!', 'success');
     
     document.getElementById('eventName').value = ''; document.getElementById('eventLocation').value = ''; document.getElementById('eventDesc').value = '';
 }

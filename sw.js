@@ -1,9 +1,11 @@
-const CACHE_NAME = 'studiflow-v1';
+const CACHE_NAME = 'studiflow-v3';
 const urlsToCache = [
   '/',
   '/index.html',
   '/style.css',
-  '/script.js'
+  '/script.js',
+  '/manifest.json',
+  '/icon-512.png'
 ];
 
 self.addEventListener('install', event => {
@@ -12,6 +14,22 @@ self.addEventListener('install', event => {
       .then(cache => {
         return cache.addAll(urlsToCache);
       })
+  );
+});
+
+// Membersihkan cache lama saat versi baru aktif
+self.addEventListener('activate', event => {
+  event.waitUntil(
+    caches.keys().then(cacheNames => {
+      return Promise.all(
+        cacheNames.map(cache => {
+          if (cache !== CACHE_NAME) {
+            console.log('Menghapus cache lama:', cache);
+            return caches.delete(cache);
+          }
+        })
+      );
+    })
   );
 });
 

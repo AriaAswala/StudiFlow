@@ -22,6 +22,19 @@ function showToast(message, type = 'success') {
     setTimeout(() => toast.remove(), 3000);
 }
 
+// Fungsi Set Tanggal Hari Ini sebagai Default
+function setTodayDate() {
+    const today = new Date().toISOString().split('T')[0];
+    const dateInputs = ['deadlineDate', 'eventDate'];
+    dateInputs.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.value = today;
+            el.min = today; // Mencegah pilih tanggal lampau
+        }
+    });
+}
+
 // --- Pendaftaran Service Worker untuk Notifikasi Latar Belakang ---
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js')
@@ -59,26 +72,114 @@ function sendNotification(title, message) {
 let tasks = JSON.parse(localStorage.getItem('sf_tasks')) || [];
 let materials = JSON.parse(localStorage.getItem('sf_materials')) || [];
 let events = JSON.parse(localStorage.getItem('sf_events')) || [];
+let courses = JSON.parse(localStorage.getItem('sf_courses')) || ["Umum", "Algoritma", "Basis Data"]; // Default matkul
 let countdownInterval;
+let lastAddedId = null; // Track item baru untuk animasi
 
-// Fungsi Navigasi Tab
+// --- FUNGSI MATA KULIAH ---
+function saveCourses() { localStorage.setItem('sf_courses', JSON.stringify(courses)); }
+
+function renderCourseSelects() {
+    const selects = ['courseName', 'matCourse'];
+    selects.forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const oldVal = el.value;
+        el.innerHTML = '<option value="" disabled selected>Pilih Mata Kuliah...</option>';
+        courses.forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c;
+            opt.textContent = c;
+            el.appendChild(opt);
+        });
+        if (courses.includes(oldVal)) el.value = oldVal;
+    });
+}
+
+function promptAddCourse() {
+    const name = prompt("Masukkan nama Mata Kuliah baru:");
+    if (name && name.trim() !== "") {
+        const trimmed = name.trim();
+        if (!courses.includes(trimmed)) {
+            courses.push(trimmed);
+            saveCourses();
+            renderCourseSelects();
+            // Juga set pilihan ke matkul yang baru dibuat
+            document.getElementById('courseName').value = trimmed;
+            document.getElementById('matCourse').value = trimmed;
+            showToast(`Mata Kuliah "${trimmed}" berhasil ditambahkan!`, 'success');
+        } else {
+            showToast("Mata Kuliah sudah ada!", "error");
+        }
+    }
+}
+
+// Fungsi Navigasi Tab Utama
 function switchTab(tabId, btnElement) {
     document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
-    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('.menu-bar .tab-btn').forEach(btn => btn.classList.remove('active'));
     document.getElementById(`tab-${tabId}`).classList.add('active');
     btnElement.classList.add('active');
+}
+
+// Fungsi Navigasi Form (Tugas / Materi)
+function changeAkademikForm(formId, btnElement) {
+    // Sembunyikan semua form di dalam tab akademik
+    const forms = ['form-tugas', 'form-materi'];
+    forms.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+    });
+    
+    // Tampilkan form yang dipilih
+    const targetForm = document.getElementById(`form-${formId}`);
+    if (targetForm) {
+        targetForm.style.display = 'flex';
+    }
+    
+    // Update status active pada tombol
+    if (btnElement) {
+        const parent = btnElement.closest('.form-toggle-row');
+        if (parent) {
+            parent.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            btnElement.classList.add('active');
+        }
+    }
+}
+
+// --- FUNGSI STATISTIK RINGKAS ---
+function updateStats() {
+    const elTugas = document.getElementById('stat-tugas');
+    if (elTugas) {
+        elTugas.textContent = tasks.length;
+        document.getElementById('stat-materi').textContent = materials.length;
+        document.getElementById('stat-urgent').textContent = tasks.filter(t => t.priority === 'tinggi').length;
+    }
 }
 
 // --- FUNGSI TUGAS ---
 function saveTasks() { localStorage.setItem('sf_tasks', JSON.stringify(tasks)); }
 
 function renderTasks() {
+    updateStats();
     const list = document.getElementById('taskList');
     list.innerHTML = '';
+    
+    if (tasks.length === 0) {
+        list.innerHTML = '<div class="empty-state"><span>☕</span><p>Santai dulu, belum ada tugas nih!</p></div>';
+        clearInterval(countdownInterval);
+        return;
+    }
+
     tasks.sort((a, b) => new Date(`${a.date}T${a.time}`) - new Date(`${b.date}T${b.time}`));
 
     tasks.forEach((task, i) => {
         const li = document.createElement('li');
+        li.className = `priority-${task.priority || 'sedang'}`;
+        if (task.isNew) {
+            li.classList.add('new-item-anim');
+            delete task.isNew; // Hanya animasi sekali
+        }
         const fDate = new Date(`${task.date}T${task.time}`).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'short' });
         const safeDesc = escapeHTML(task.desc);
         const descHTML = safeDesc ? `<div class="desc-box">${safeDesc}</div>` : '';
@@ -130,16 +231,20 @@ function addTask() {
     const name = document.getElementById('taskName').value;
     const course = document.getElementById('courseName').value;
     const desc = document.getElementById('taskDesc').value;
+    const priority = document.getElementById('taskPriority').value;
     const date = document.getElementById('deadlineDate').value;
     let time = document.getElementById('deadlineTime').value || "23:59";
 
     if (!name || !course || !date) return showToast('Isi data tugas dengan lengkap!', 'error');
     
-    tasks.push({ name, course, desc, date, time });
+    tasks.push({ name, course, priority, desc, date, time, isNew: true });
     saveTasks(); renderTasks();
     showToast('Tugas berhasil ditambahkan!', 'success');
     
-    document.getElementById('taskName').value = ''; document.getElementById('courseName').value = ''; document.getElementById('taskDesc').value = '';
+    document.getElementById('taskName').value = ''; 
+    document.getElementById('courseName').value = ''; 
+    document.getElementById('taskDesc').value = '';
+    setTodayDate();
 }
 function deleteTask(i) { tasks.splice(i, 1); saveTasks(); renderTasks(); }
 
@@ -169,14 +274,24 @@ function updateCourseFilter() {
 }
 
 function renderMaterials() {
+    updateStats();
     const list = document.getElementById('materialList');
     const filterVal = document.getElementById('filterCourse').value;
     list.innerHTML = '';
     const filtered = filterVal === "Semua" ? materials : materials.filter(m => m.course === filterVal);
 
+    if (filtered.length === 0) {
+        list.innerHTML = '<div class="empty-state"><span>📁</span><p>Belum ada materi tersimpan.</p></div>';
+        return;
+    }
+
     filtered.forEach((mat, i) => {
         const li = document.createElement('li');
         li.className = "materi-item";
+        if (mat.isNew) {
+            li.classList.add('new-item-anim');
+            delete mat.isNew;
+        }
         const safeDesc = escapeHTML(mat.desc);
         const descHTML = safeDesc ? `<div class="desc-box">${safeDesc}</div>` : '';
         let actionHTML = mat.sourceType === 'link' ? 
@@ -212,7 +327,7 @@ function addMaterial() {
         link = document.getElementById('matLink').value;
         if (!course || !name || !link) return showToast('Isi Matkul, Judul, dan Link!', 'error');
         
-        materials.push({ course, name, type, desc, sourceType, link, fileName, fileData });
+        materials.push({ course, name, type, desc, sourceType, link, fileName, fileData, isNew: true });
         saveMaterials(); updateCourseFilter(); renderMaterials();
         clearMatInputs();
         showToast('Materi berhasil disimpan!', 'success');
@@ -227,7 +342,7 @@ function addMaterial() {
         const reader = new FileReader();
         reader.onload = function(e) {
             fileData = e.target.result;
-            materials.push({ course, name, type, desc, sourceType, link, fileName, fileData });
+            materials.push({ course, name, type, desc, sourceType, link, fileName, fileData, isNew: true });
             saveMaterials(); updateCourseFilter(); renderMaterials();
             clearMatInputs();
             showToast('Materi file berhasil disimpan!', 'success');
@@ -253,6 +368,10 @@ function renderEvents() {
     events.forEach((ev, i) => {
         const li = document.createElement('li');
         li.className = "acara-item";
+        if (ev.isNew) {
+            li.classList.add('new-item-anim');
+            delete ev.isNew;
+        }
         const fDate = new Date(`${ev.date}T${ev.time}`).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' });
         const safeDesc = escapeHTML(ev.desc);
         const descHTML = safeDesc ? `<div class="desc-box">${safeDesc}</div>` : '';
@@ -277,17 +396,20 @@ function addEvent() {
     const time = document.getElementById('eventTime').value;
 
     if (!name || !location || !date || !time) return showToast('Lengkapi data acara!', 'error');
-    events.push({ name, location, desc, date, time });
+    events.push({ name, location, desc, date, time, isNew: true });
     saveEvents(); renderEvents();
     showToast('Acara berhasil ditambahkan!', 'success');
     
     document.getElementById('eventName').value = ''; document.getElementById('eventLocation').value = ''; document.getElementById('eventDesc').value = '';
+    setTodayDate();
 }
 function deleteEvent(i) { events.splice(i, 1); saveEvents(); renderEvents(); }
 
 // --- Inisialisasi ---
 document.getElementById('deadlineTime').value = "23:59";
 if (Notification.permission === "granted") document.getElementById('notif-btn').style.display = 'none';
+setTodayDate();
+renderCourseSelects();
 updateCourseFilter();
 renderTasks();
 renderMaterials();
